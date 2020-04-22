@@ -2,6 +2,7 @@ import { getCustomRepository, getRepository, In } from 'typeorm'
 import csvParse from 'csv-parse'
 import fs from 'fs'
 
+import AppError from '../errors/AppError'
 import TransactionsRepository from '../repositories/TransactionsRepository'
 import Transaction from '../models/Transaction'
 import Category from '../models/Category'
@@ -26,6 +27,11 @@ class ImportTransactionsService {
 
     const transactions: CSVTransaction[] = []
     const categories: string[] = []
+    /* const balance = {
+      income: 0,
+      outcome: 0,
+      total: 0,
+    } */
 
     parseCSV.on('data', async line => {
       const [title, type, value, category] = line.map((cell: string) =>
@@ -33,6 +39,23 @@ class ImportTransactionsService {
       )
 
       if (!title || !type || !value) return
+
+      /* switch (type) {
+        case 'income':
+          balance.income += Number(value)
+          break
+        case 'outcome':
+          if (value > balance.total) {
+            throw new AppError(
+              "You don't have enough balance to execute this transaction.",
+            )
+          }
+          balance.outcome += Number(value)
+          break
+        default:
+          break
+      }
+      balance.total = balance.income - balance.outcome */
 
       categories.push(category)
 
@@ -44,7 +67,10 @@ class ImportTransactionsService {
       })
     })
 
-    await new Promise(resolve => parseCSV.on('end', resolve))
+    await new Promise((resolve, reject) => {
+      parseCSV.on('error', err => reject(err))
+      parseCSV.on('end', resolve)
+    })
 
     const existentCategories = await categoriesRepository.find({
       where: { title: In(categories) },
